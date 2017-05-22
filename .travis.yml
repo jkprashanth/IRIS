@@ -16,4 +16,4 @@ jdk:
 braches:
     only:
         - master
-        - 0.13.x
+        - 0.14.x
