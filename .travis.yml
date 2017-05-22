@@ -12,7 +12,7 @@ script:
   # Travis 4MB log limit, hence secondary log is redirected to sink
   - mvn clean install -B -V 2>/dev/null
 jdk:
-    - oraclejdk7
+    - oraclejdk8
 braches:
     only:
         - master
