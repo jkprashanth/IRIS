@@ -1,7 +1,7 @@
 /*
  * Our Xtext Java class generator
  */
-package com.temenos.interaction.rimdsl.generator
+package com.temenos.interaction.rimdsl.generator 
 
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.IGenerator
@@ -43,9 +43,12 @@ class RIMDslGeneratorSpringPRD implements IGenerator {
 	}
 		
 	def void generate(Resource resource, ResourceInteractionModel rim, IFileSystemAccess fsa) {
-        val rimName = rim.fullyQualifiedName.toString("_")
+        var rimName = rim.fullyQualifiedName.toString("_")
         		
         // generate resource state files
+        if(rimName.contains("ContextEnquiry")){             
+        rimName = rimName+"_"+ System.currentTimeMillis;
+        } 
         
         fsa.generateFile("IRIS-" + rimName + "-PRD.xml", toSpringXML(rim))
 
