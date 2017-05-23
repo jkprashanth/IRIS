@@ -22,6 +22,7 @@ package com.temenos.interaction.springdsl;
  */
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
@@ -50,6 +51,7 @@ import com.temenos.interaction.core.hypermedia.MethodNotAllowedException;
 import com.temenos.interaction.core.hypermedia.PathTree;
 import com.temenos.interaction.core.hypermedia.ResourceState;
 import com.temenos.interaction.core.hypermedia.ResourceStateProvider;
+import com.temenos.interaction.core.hypermedia.Transition;
 import com.temenos.interaction.core.resource.ConfigLoader;
 
 public class SpringDSLResourceStateProvider implements ResourceStateProvider, DynamicRegistrationResourceStateProvider {
@@ -84,6 +86,8 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 	 * Map to a resource path where the state name is the key
 	 */
 	protected Map<String, String> resourcePathsByState = new HashMap<String, String>();
+	
+	private static final String CTX_ENQ_FILENAME_PATTERN ="IRIS-T24_ContextEnquiry_(\\d+)-PRD.xml";
 
 	PathTree pathTree = new PathTree();
     
@@ -374,7 +378,20 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 			if(context != null) {
 				result = loadAllResourceStatesFromFile(context, tmpResourceStateName);
 			}
+			
+			if (result == null) {
+		                List<String> timestampedFiles = getTimestampedResourceStateFiles(tmpResourceName);
+		                if (!timestampedFiles.isEmpty()) {
+		                    result = loadAllResourceStatesFromTimeStampedResourceState(tmpResourceStateName, timestampedFiles);
+		                }
+		            }
 		}
+		
+		// T24_ContextEnquiry => IRIS-T24_ContextEnquiry-PRD.xml
+	        // IRIS-T24_ContextEnquiry_2324234234-PRD.xml --> IRIS-T24_ContextEnquiry_(//d+)-PRD.xml
+	        private List<String> getTimestampedResourceStateFiles(String tmpResourceName) {
+	            return getFileLists();
+	        }
 
 		private ResourceState loadAllResourceStatesFromFile(ApplicationContext context, String resourceState) {
 			Map<String,ResourceState> tmpResources = context.getBeansOfType(ResourceState.class);
@@ -392,6 +409,36 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 		}
 
 
+		 private ResourceState loadAllResourceStatesFromTimeStampedResourceState(String resourceState,
+		                List<String> timestampledFiles) {
+
+		            Set<Transition> ctxListTransitions = new HashSet<Transition>();
+
+		            int itsAddTime = 0;
+		            ResourceState result = null;
+
+		            for (String timestampledFile : timestampledFiles) { // load timestamp based resourcestate
+
+
+		                ApplicationContext context2 = createApplicationContext(timestampledFile);
+		                Map<String, ResourceState> tmpResources = context2.getBeansOfType(ResourceState.class);
+		                ctxListTransitions.addAll(tmpResources.get(resourceState).getTransitions()); // add
+		                                                                                             // transisition
+
+		                if (!(itsAddTime < timestampledFiles.size() - 1)) {
+		                    tmpResources.get(resourceState).getTransitions().clear(); // clear the list before add
+		                    tmpResources.get(resourceState).setTransitions(new ArrayList<Transition>(ctxListTransitions)); // update
+		                                                                                                                   // transition
+		                }
+		                resources.putAll(tmpResources);
+
+		                if (tmpResources.containsKey(resourceState)) {
+		                    result = tmpResources.get(resourceState);
+		                }
+		                itsAddTime++;
+		            }
+		            return result;
+		        }
 		/**
 		 * @param beanXml the filename to locate
 		 * @return a Spring ApplicationContext
@@ -478,6 +525,23 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
         }
         
         return resourceStateId;
+    }
+    
+    private List<String> getFileLists() {
+        List<String> filename = new ArrayList<String>();
+        for (String pathToDirectory : configLoader.getIrisConfigDirPaths()) {
+            File dir = new File(pathToDirectory);
+            File files[] = dir.listFiles(new FilenameFilter() {
+                @Override
+                public boolean accept(File dir, String name) {
+                    return name.matches(CTX_ENQ_FILENAME_PATTERN);
+                }
+            });
+            for (File file : files) {
+                filename.add(file.getName());
+            }
+        }
+        return filename;
     }
 
 }

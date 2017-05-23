@@ -43,7 +43,11 @@ class RIMDslGeneratorSpringPRD implements IGenerator {
 	}
 		
 	def void generate(Resource resource, ResourceInteractionModel rim, IFileSystemAccess fsa) {
-        val rimName = rim.fullyQualifiedName.toString("_")
+        var rimName = rim.fullyQualifiedName.toString("_")
+        
+        if(rimName.contains("ContextEnquiry")){             
+        rimName = rimName+"_"+ System.currentTimeMillis;
+        } 
         		
         // generate resource state files
         
