@@ -530,7 +530,7 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
     
     private List<String> getFileLists() {
         List<String> filename = new ArrayList<String>();
-        Pattern p = Pattern.compile(CTX_ENQ_FILENAME_PATTERN);
+        final Pattern p = Pattern.compile(CTX_ENQ_FILENAME_PATTERN);
         for (String pathToDirectory : configLoader.getIrisConfigDirPaths()) {
             File dir = new File(pathToDirectory);
             File files[] = dir.listFiles(new FilenameFilter() {
