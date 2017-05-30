@@ -22,10 +22,14 @@ package com.temenos.interaction.springdsl;
  */
 
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +54,7 @@ import com.temenos.interaction.core.hypermedia.MethodNotAllowedException;
 import com.temenos.interaction.core.hypermedia.PathTree;
 import com.temenos.interaction.core.hypermedia.ResourceState;
 import com.temenos.interaction.core.hypermedia.ResourceStateProvider;
+import com.temenos.interaction.core.hypermedia.Transition;
 import com.temenos.interaction.core.resource.ConfigLoader;
 
 public class SpringDSLResourceStateProvider implements ResourceStateProvider, DynamicRegistrationResourceStateProvider {
@@ -374,7 +379,14 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 			if(context != null) {
 				result = loadAllResourceStatesFromFile(context, tmpResourceStateName);
 			}
-		}
+			
+            if (result == null) {
+                List<String> timestampedFiles = getTimestampedResourceStateFileLists(tmpResourceName);
+                if (!timestampedFiles.isEmpty()) {
+                    result = loadAllResourceStatesFromTimeStampedResourceState(tmpResourceStateName, timestampedFiles);
+                }
+            }
+        }
 
 		private ResourceState loadAllResourceStatesFromFile(ApplicationContext context, String resourceState) {
 			Map<String,ResourceState> tmpResources = context.getBeansOfType(ResourceState.class);
@@ -391,7 +403,35 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 			return result;
 		}
 
+        private ResourceState loadAllResourceStatesFromTimeStampedResourceState(String resourceState,
+                List<String> timestampledFiles) {
 
+            Set<Transition> ctxListTransitions = new HashSet<Transition>();
+
+            int itsAddTime = 0;
+            ResourceState result = null;
+            // load timestamp based resourcestate
+            for (String timestampledFile : timestampledFiles) {
+
+                ApplicationContext context2 = createApplicationContext(timestampledFile);
+                Map<String, ResourceState> tmpResources = context2.getBeansOfType(ResourceState.class);
+                // add transisition
+                ctxListTransitions.addAll(tmpResources.get(resourceState).getTransitions());
+                if (!(itsAddTime < timestampledFiles.size() - 1)) {
+                    // clear the list before add
+                    tmpResources.get(resourceState).getTransitions().clear();
+                    // update transition
+                    tmpResources.get(resourceState).setTransitions(new ArrayList<Transition>(ctxListTransitions));
+                }
+                resources.putAll(tmpResources);
+
+                if (tmpResources.containsKey(resourceState)) {
+                    result = tmpResources.get(resourceState);
+                }
+                itsAddTime++;
+            }
+            return result;
+        }
 		/**
 		 * @param beanXml the filename to locate
 		 * @return a Spring ApplicationContext
@@ -478,6 +518,32 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
         }
         
         return resourceStateId;
+    }
+    
+    private List<String> getTimestampedResourceStateFileLists(String tmpResourceName) {
+        List<String> filename = new ArrayList<String>();
+        for (String pathToDirectory : configLoader.getIrisConfigDirPaths()) {
+
+            Path dir = FileSystems.getDefault().getPath(pathToDirectory);
+            final PathMatcher matcher = dir.getFileSystem().getPathMatcher(
+                    "regex:" + "IRIS-" + tmpResourceName + "_(\\d+)-PRD.xml");
+            DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path>() {
+
+                @Override
+                public boolean accept(Path entry) {
+                    return matcher.matches(entry.getFileName());
+                }
+            };
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, filter)) {
+
+                for (Path streamEntry : stream) {
+                    filename.add(streamEntry.toFile().getName());
+                }
+            } catch (IOException e) {
+                logger.error("Failed to load timestamped file from" + dir);
+            }
+        }
+        return filename;
     }
 
 }
