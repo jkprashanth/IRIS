@@ -90,8 +90,6 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 	 */
 	protected Map<String, String> resourcePathsByState = new HashMap<String, String>();
 	
-	private static final String CTX_ENQ_FILENAME_PATTERN ="IRIS-T24_ContextEnquiry_(\\d+)-PRD.xml";
-
 	PathTree pathTree = new PathTree();
     
 	public SpringDSLResourceStateProvider() {}
