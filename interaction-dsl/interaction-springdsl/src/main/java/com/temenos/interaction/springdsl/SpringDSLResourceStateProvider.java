@@ -22,10 +22,14 @@ package com.temenos.interaction.springdsl;
  */
 
 import java.io.File;
-import java.io.FilenameFilter;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,381 +60,367 @@ import com.temenos.interaction.core.resource.ConfigLoader;
 public class SpringDSLResourceStateProvider implements ResourceStateProvider, DynamicRegistrationResourceStateProvider {
     private final Logger logger = LoggerFactory.getLogger(SpringDSLResourceStateProvider.class);
 
-    private ConcurrentMap<String, ResourceState> resources = new ConcurrentHashMap<String, ResourceState>();
+	private ConcurrentMap<String, ResourceState> resources = new ConcurrentHashMap<String, ResourceState>();
 
-    protected StateRegisteration stateRegisteration;
-    
-    private ConfigLoader configLoader = new ConfigLoader();
+	protected StateRegisteration stateRegisteration;
+	
+	private ConfigLoader configLoader = new ConfigLoader();
 
     /**
      * Map of ResourceState bean names, to paths.
      */
-    protected Properties beanMap;
+	protected Properties beanMap;
 
-    protected boolean initialised = false;
+	protected boolean initialised = false;
+	
+	/**
+	 * Map of paths to state names
+	 */
+	protected Map<String, Set<String>> resourceStatesByPath = new HashMap<String, Set<String>>();
+	/**
+	 * Map of request to state names
+	 */
+	protected Map<String, String> resourceStatesByRequest = new HashMap<String, String>();
+	/**
+	 * Map of resource methods where state name is the key
+	 */
+	protected Map<String, Set<String>> resourceMethodsByState = new HashMap<String, Set<String>>();
+	/**
+	 * Map to a resource path where the state name is the key
+	 */
+	protected Map<String, String> resourcePathsByState = new HashMap<String, String>();
+	
+	PathTree pathTree = new PathTree();
     
-    /**
-     * Map of paths to state names
-     */
-    protected Map<String, Set<String>> resourceStatesByPath = new HashMap<String, Set<String>>();
-    /**
-     * Map of request to state names
-     */
-    protected Map<String, String> resourceStatesByRequest = new HashMap<String, String>();
-    /**
-     * Map of resource methods where state name is the key
-     */
-    protected Map<String, Set<String>> resourceMethodsByState = new HashMap<String, Set<String>>();
-    /**
-     * Map to a resource path where the state name is the key
-     */
-    protected Map<String, String> resourcePathsByState = new HashMap<String, String>();
+	public SpringDSLResourceStateProvider() {}
+	public SpringDSLResourceStateProvider(Properties beanMap) {
+		this.beanMap = beanMap;
+	}
 
-    private static final String CTX_ENQ_FILENAME_PATTERN ="IRIS-T24_ContextEnquiry_(\\d+)-PRD.xml";
-    
-    PathTree pathTree = new PathTree();
-    
-    public SpringDSLResourceStateProvider() {}
-    public SpringDSLResourceStateProvider(Properties beanMap) {
-        this.beanMap = beanMap;
-    }
+	public void setResourceMap(Properties beanMap) {
+		this.beanMap = beanMap;
+	}
+	
+	@Autowired(required = false)
+	public void setConfigLoader(ConfigLoader configLoader) {
+		this.configLoader = configLoader;
+	}
 
-    public void setResourceMap(Properties beanMap) {
-        this.beanMap = beanMap;
-    }
-    
-    @Autowired(required = false)
-    public void setConfigLoader(ConfigLoader configLoader) {
-        this.configLoader = configLoader;
-    }
+	protected void initialise() {
+		if (initialised)
+			return;
+		for (Object stateObj : beanMap.keySet()) {
+			storeState(stateObj, null);
+		}
+				
+		initialised = true;
+	}
 
-    protected void initialise() {
-        if (initialised)
-            return;
-        for (Object stateObj : beanMap.keySet()) {
-            storeState(stateObj, null);
-        }
-                
-        initialised = true;
-    }
-
-    protected void storeState(Object stateObj, String binding) {
-        String stateName = stateObj.toString();
-        
-        // binding is [GET,PUT /thePath]
-        if (binding == null){
-            binding = beanMap.getProperty(stateName);
-        }
-        
-        // split into methods and path
-        String[] strs = binding.split(" ");
-        String methodPart = strs[0];
-        String path = strs[1];
-        // methods
-        String[] methodsStrs = methodPart.split(",");
-        // path
-        resourcePathsByState.put(stateName, path);
-        // methods
-        Set<String> methodSet = resourceMethodsByState.get(stateName);
-        
-        if (methodSet == null) {
-            methodSet = new HashSet<String>();
-        }
-        
+	protected void storeState(Object stateObj, String binding) {
+		String stateName = stateObj.toString();
+		
+		// binding is [GET,PUT /thePath]
+		if (binding == null){
+			binding = beanMap.getProperty(stateName);
+		}
+		
+		// split into methods and path
+		String[] strs = binding.split(" ");
+		String methodPart = strs[0];
+		String path = strs[1];
+		// methods
+		String[] methodsStrs = methodPart.split(",");
+		// path
+		resourcePathsByState.put(stateName, path);
+		// methods
+		Set<String> methodSet = resourceMethodsByState.get(stateName);
+		
+		if (methodSet == null) {
+		    methodSet = new HashSet<String>();
+		}
+		
         for(String methodStr: methodsStrs) {
             methodSet.add(methodStr);
             
             pathTree.put(path, methodStr, stateName);
         }
-        
-        resourceMethodsByState.put(stateName, methodSet);
-        
-        for (String method : methodSet) {
-            String request = method + " " + path;
-            logger.debug("Binding ["+stateName+"] to ["+request+"]");
-            String found = resourceStatesByRequest.get(request);
-            if (found != null) {
-                logger.error("Multiple states bound to the same request ["+request+"], overriding ["+found+"] with ["+stateName+"]");
-            }
-            resourceStatesByRequest.put(request, stateName);
-        }
+		
+		resourceMethodsByState.put(stateName, methodSet);
+		
+		for (String method : methodSet) {
+			String request = method + " " + path;
+			logger.debug("Binding ["+stateName+"] to ["+request+"]");
+			String found = resourceStatesByRequest.get(request);
+			if (found != null) {
+				logger.error("Multiple states bound to the same request ["+request+"], overriding ["+found+"] with ["+stateName+"]");
+			}
+			resourceStatesByRequest.put(request, stateName);
+		}
 
-        Set<String> stateNames = resourceStatesByPath.get(path);
-        if (stateNames == null) {
-            stateNames = new HashSet<String>();
-        }
-        stateNames.add(stateName);
-        resourceStatesByPath.put(path, stateNames);     
-    }
-    
-    
+		Set<String> stateNames = resourceStatesByPath.get(path);
+		if (stateNames == null) {
+			stateNames = new HashSet<String>();
+		}
+		stateNames.add(stateName);
+		resourceStatesByPath.put(path, stateNames);		
+	}
+	
+	
 
-    public void addState(String stateObj, Properties properties) {
-        if (initialised) {
-            String stateName = stateObj.toString();
+	public void addState(String stateObj, Properties properties) {
+		if (initialised) {
+			String stateName = stateObj.toString();
 
-            // binding is [GET,PUT /thePath]
-            String binding = properties.getProperty(stateName);
+			// binding is [GET,PUT /thePath]
+			String binding = properties.getProperty(stateName);
 
-            // split into methods and path
-            String[] strs = binding.split(" ");
-            String methodPart = strs[0];
-            String path = strs[1];
+			// split into methods and path
+			String[] strs = binding.split(" ");
+			String methodPart = strs[0];
+			String path = strs[1];
 
-            // methods
-            String[] methods = methodPart.split(",");
+			// methods
+			String[] methods = methodPart.split(",");
 
-            logger.info("Attempting to register state: " + stateName + " methods: " + methods + " path: " + path);
+			logger.info("Attempting to register state: " + stateName + " methods: " + methods + " path: " + path);
 
-            // preemptive loading
-            ResourceState state = getResourceState(stateName);
-            
-            if (state != null){
-                storeState(stateName, binding);
-                
-                Set<String> methodSet = new HashSet<String>();
-                
-                for(String methodStr: methods) {
-                    methodSet.add(methodStr);
-                }
-            }
-        }
-    }
-    
-    public void unload(String name) {       
-        resources.remove(name);
-    }
+			// preemptive loading
+			ResourceState state = getResourceState(stateName);
+			
+			if (state != null){
+				storeState(stateName, binding);
+				
+				Set<String> methodSet = new HashSet<String>();
+				
+		        for(String methodStr: methods) {
+		            methodSet.add(methodStr);
+		        }
+			}
+		}
+	}
+	
+	public void unload(String name) {	    
+	    resources.remove(name);
+	}
 
-    @Override
-    public boolean isLoaded(String name) {
-        return resources.containsKey(name);
-    }
+	@Override
+	public boolean isLoaded(String name) {
+		return resources.containsKey(name);
+	}
 
-    
-    @Override
-    public ResourceState getResourceState(String resourceStateName) {
-        ResourceState result = null;
+	@Override
+	public ResourceState getResourceState(String resourceStateName) {
+		ResourceState result = null;
 
-        try {
-            if (resourceStateName != null) {
-                // Try to retrieve the resource state
-                result = resources.get(resourceStateName);
+		try {
+			if (resourceStateName != null) {
+				// Try to retrieve the resource state
+				result = resources.get(resourceStateName);
 
-                if (result == null) {
-                    // Resource state has not already been loaded so attempt to load it
-                    ResourceStateLoad newState = new ResourceStateLoad(resourceStateName);
-                    newState.load();
-                    if ( newState.isLoaded() ) {
-                        result = newState.loaded();                     
-                    } else {
-                        logger.error( newState.toString() );
-                    }
-                }
-            }
-        } catch (BeansException e) {
-            logger.error("Failed to load ["+resourceStateName+"]", e);
-        }
+				if (result == null) {
+					// Resource state has not already been loaded so attempt to load it
+					ResourceStateLoad newState = new ResourceStateLoad(resourceStateName);
+					newState.load();
+					if ( newState.isLoaded() ) {
+						result = newState.loaded();						
+					} else {
+						logger.error( newState.toString() );
+					}
+				}
+			}
+		} catch (BeansException e) {
+			logger.error("Failed to load ["+resourceStateName+"]", e);
+		}
 
-        return result;
-    }
+		return result;
+	}
 
-    @Override
-    public ResourceState determineState(Event event, String resourcePath) {
-        initialise();
-        String request = event.getMethod() + " " + resourcePath;
-        String stateName = resourceStatesByRequest.get(request);
-        if (stateName != null){
-            logger.debug("Found state ["+stateName+"] for ["+request+"]");
-            return getResourceState(stateName);
-        }else{
-            logger.warn("NOT Found state ["+stateName+"] for ["+request+"]");
-            return null;
-        }
-    }
+	@Override
+	public ResourceState determineState(Event event, String resourcePath) {
+		initialise();
+		String request = event.getMethod() + " " + resourcePath;
+		String stateName = resourceStatesByRequest.get(request);
+		if (stateName != null){
+			logger.debug("Found state ["+stateName+"] for ["+request+"]");
+			return getResourceState(stateName);
+		}else{
+			logger.warn("NOT Found state ["+stateName+"] for ["+request+"]");
+			return null;
+		}
+	}
 
-    @Override
-    public Map<String, Set<String>> getResourceStatesByPath() {
-        initialise();
-        return resourceStatesByPath;
-    }
+	@Override
+	public Map<String, Set<String>> getResourceStatesByPath() {
+		initialise();
+		return resourceStatesByPath;
+	}
 
-    public Map<String, Set<String>> getResourceMethodsByState() {
-        initialise();
-        return resourceMethodsByState;
-    }
+	public Map<String, Set<String>> getResourceMethodsByState() {
+		initialise();
+		return resourceMethodsByState;
+	}
 
-    public Map<String, String> getResourcePathsByState() {
-        initialise();
-        return resourcePathsByState;
-    }
+	public Map<String, String> getResourcePathsByState() {
+		initialise();
+		return resourcePathsByState;
+	}
 
-    protected Map<String, Set<String>> getResourceStatesByPath(Properties beanMap) {
-        initialise();
-        return resourceStatesByPath;
-    }
+	protected Map<String, Set<String>> getResourceStatesByPath(Properties beanMap) {
+		initialise();
+		return resourceStatesByPath;
+	}
 
-    @Override
-    public void setStateRegisteration(StateRegisteration registerState) {
-        this.stateRegisteration = registerState;
-    }
+	@Override
+	public void setStateRegisteration(StateRegisteration registerState) {
+		this.stateRegisteration = registerState;
+	}
 
 
-    /** Load a Resource State from the appropriate location (file or classpath).
-     *  There are likely to be several possibilities for where the requested
-     *  resource could be: this tracks all of them so that they can be logged
-     *  if the resource is not found.
-     */
-    private class ResourceStateLoad {
+	/** Load a Resource State from the appropriate location (file or classpath).
+	 *  There are likely to be several possibilities for where the requested
+	 *  resource could be: this tracks all of them so that they can be logged
+	 *  if the resource is not found.
+	 */
+	private class ResourceStateLoad {
 
-        private String state;
-        private List<String> attempts = new ArrayList<String>(2);
-        private String foundFile;
-        private ResourceState result;
-                
-        /** Define a resource state to load. Must call load() to actually load it. */
-        public ResourceStateLoad( String resourceStateName ) {
-            state = resourceStateName;
-        }
+		private String state;
+		private List<String> attempts = new ArrayList<String>(2);
+		private String foundFile;
+		private ResourceState result;
 
-        /** Was the load operation successful?
-         */
-        public boolean isLoaded() {
-            return ( result != null );
-        }
+		/** Define a resource state to load. Must call load() to actually load it. */
+		public ResourceStateLoad( String resourceStateName ) {
+			state = resourceStateName;
+		}
 
-        /** Get the Resource State from a successful load
-         */
-        public ResourceState loaded() {
-            return result;
-        }
+		/** Was the load operation successful?
+		 */
+		public boolean isLoaded() {
+			return ( result != null );
+		}
 
-        /** Description of the state of this load, intended for logging
-         */
-        public String toString() {
-            if ( isLoaded() ) {
-                return "Loaded Resource State " + state + " from " + foundFile;
-            } else if (attempts.size()==0) {
-                return "Not-loaded Resource State " + state;
-            } else if (foundFile != null ) {
-                return "State " + state + " not found in " + foundFile;
-            }
+		/** Get the Resource State from a successful load
+		 */
+		public ResourceState loaded() {
+			return result;
+		}
 
-            StringBuilder msg = new StringBuilder( "Failed to load resource state " );
-            msg.append( state );
-            msg.append( ". Attempted to load from " );
-            for ( int i = 0 ; i < attempts.size() ; ++i ) {
-                if ( i > 0 ) msg.append(", ");
-                msg.append("[");
-                msg.append(attempts.get(i));
-                msg.append("]");
-            }
-            return msg.toString();
-        }
+		/** Description of the state of this load, intended for logging
+		 */
+		public String toString() {
+			if ( isLoaded() ) {
+				return "Loaded Resource State " + state + " from " + foundFile;
+			} else if (attempts.size()==0) {
+				return "Not-loaded Resource State " + state;
+			} else if (foundFile != null ) {
+				return "State " + state + " not found in " + foundFile;
+			}
 
-        /** Load the configured resource state.
-         *  Use this method only once.
-         *  call isLoaded() to discover success or failure
-         */
-        public void load() {
-            // check that this has not been called before
-            if ( attempts.size() > 0 )
-                throw new IllegalStateException( "repeated call to load()" );
+			StringBuilder msg = new StringBuilder( "Failed to load resource state " );
+			msg.append( state );
+			msg.append( ". Attempted to load from " );
+			for ( int i = 0 ; i < attempts.size() ; ++i ) {
+				if ( i > 0 ) msg.append(", ");
+				msg.append("[");
+				msg.append(attempts.get(i));
+				msg.append("]");
+			}
+			return msg.toString();
+		}
 
-            String tmpResourceStateName = state;
-            String tmpResourceName = tmpResourceStateName;
+		/** Load the configured resource state.
+		 *  Use this method only once.
+		 *  call isLoaded() to discover success or failure
+		 */
+		public void load() {
+			// check that this has not been called before
+			if ( attempts.size() > 0 )
+				throw new IllegalStateException( "repeated call to load()" );
 
-            if(tmpResourceName.contains("-")) {
-                tmpResourceName = tmpResourceName.substring(0, tmpResourceName.indexOf("-"));
-            }
+			String tmpResourceStateName = state;
+			String tmpResourceName = tmpResourceStateName;
 
-            String beanXml = "IRIS-" + tmpResourceName + "-PRD.xml";
+			if(tmpResourceName.contains("-")) {
+				tmpResourceName = tmpResourceName.substring(0, tmpResourceName.indexOf("-"));
+			}
 
-            // Attempt to create Spring context based on current resource filename pattern
-            ApplicationContext context = createApplicationContext(beanXml);
+			String beanXml = "IRIS-" + tmpResourceName + "-PRD.xml";
 
-            if (context == null) {
-                // Failed to create Spring context using current resource filename pattern so use old pattern
-                int pos = tmpResourceName.lastIndexOf("_");
+			// Attempt to create Spring context based on current resource filename pattern
+			ApplicationContext context = createApplicationContext(beanXml);
 
-                if (pos > 3){
-                    tmpResourceName = tmpResourceName.substring(0, pos);
-                    beanXml = "IRIS-" + tmpResourceName + "-PRD.xml";
+			if (context == null) {
+				// Failed to create Spring context using current resource filename pattern so use old pattern
+				int pos = tmpResourceName.lastIndexOf("_");
 
-                    context = createApplicationContext(beanXml);
+				if (pos > 3){
+					tmpResourceName = tmpResourceName.substring(0, pos);
+					beanXml = "IRIS-" + tmpResourceName + "-PRD.xml";
 
-                    if (context != null) {
-                        // Successfully created Spring context using old resource filename pattern
+					context = createApplicationContext(beanXml);
 
-                        // Convert resource state name to old resource name format
-                        pos = tmpResourceStateName.lastIndexOf("-");
+					if (context != null) {
+						// Successfully created Spring context using old resource filename pattern
 
-                        if (pos < 0){
-                            pos = tmpResourceStateName.lastIndexOf("_");
+						// Convert resource state name to old resource name format
+						pos = tmpResourceStateName.lastIndexOf("-");
 
-                            if (pos > 0){
-                                tmpResourceStateName = tmpResourceStateName.substring(0, pos) + "-" + tmpResourceStateName.substring(pos+1);
-                            }
-                        }
-                    }
-                }
-            }
+						if (pos < 0){
+							pos = tmpResourceStateName.lastIndexOf("_");
 
-            if(context != null) {
-                result = loadAllResourceStatesFromFile(context, tmpResourceStateName);
-            }
-            
+							if (pos > 0){
+								tmpResourceStateName = tmpResourceStateName.substring(0, pos) + "-" + tmpResourceStateName.substring(pos+1);
+							}
+						}
+					}
+				}
+			}
+
+			if(context != null) {
+				result = loadAllResourceStatesFromFile(context, tmpResourceStateName);
+			}
             if (result == null) {
-                List<String> timestampedFiles = getTimestampedResourceStateFiles(tmpResourceName);
+                List<String> timestampedFiles = getTimestampedResourceStateFileLists(tmpResourceName);
                 if (!timestampedFiles.isEmpty()) {
-                    result = loadAllResourceStatesFromTimeStampedFile(tmpResourceStateName, timestampedFiles);
+                    result = loadAllResourceStatesFromTimeStampedResourceState(tmpResourceStateName, timestampedFiles);
                 }
             }
-        }
-       
-        // T24_ContextEnquiry => IRIS-T24_ContextEnquiry-PRD.xml
-        // IRIS-T24_ContextEnquiry_2324234234-PRD.xml --> IRIS-T24_ContextEnquiry_(//d+)-PRD.xml
-        private List<String> getTimestampedResourceStateFiles(String tmpResourceName) {
-            return getFileLists();
-        }
+		}
 
-        private ResourceState loadAllResourceStatesFromFile(ApplicationContext context, String resourceState) {
-            Map<String,ResourceState> tmpResources = context.getBeansOfType(ResourceState.class);
+		private ResourceState loadAllResourceStatesFromFile(ApplicationContext context, String resourceState) {
+			Map<String,ResourceState> tmpResources = context.getBeansOfType(ResourceState.class);
 
-            // Save all the loaded resources into the main resource state cache
-            resources.putAll(tmpResources);
+			// Save all the loaded resources into the main resource state cache
+			resources.putAll(tmpResources);
 
-            ResourceState result = null;
+			ResourceState result = null;
 
-            if(tmpResources.containsKey(resourceState)) {
-                result = tmpResources.get(resourceState);
-            }
+			if(tmpResources.containsKey(resourceState)) {
+				result = tmpResources.get(resourceState);
+			}
 
-            return result;
-        }
+			return result;
+		}
 
-        /**
-         * Load all resource state from timestamped file
-         */
-        private ResourceState loadAllResourceStatesFromTimeStampedFile(String resourceState,
+        private ResourceState loadAllResourceStatesFromTimeStampedResourceState(String resourceState,
                 List<String> timestampledFiles) {
 
             Set<Transition> ctxListTransitions = new HashSet<Transition>();
 
             int itsAddTime = 0;
             ResourceState result = null;
-
-            for (String timestampledFile : timestampledFiles) { // load timestamp based resourcestate
-
+            // load timestamp based resourcestate
+            for (String timestampledFile : timestampledFiles) {
 
                 ApplicationContext context2 = createApplicationContext(timestampledFile);
                 Map<String, ResourceState> tmpResources = context2.getBeansOfType(ResourceState.class);
-                ctxListTransitions.addAll(tmpResources.get(resourceState).getTransitions()); // add
-                                                                                             // transisition
-
+                // add transisition
+                ctxListTransitions.addAll(tmpResources.get(resourceState).getTransitions());
                 if (!(itsAddTime < timestampledFiles.size() - 1)) {
-                    tmpResources.get(resourceState).getTransitions().clear(); // clear the list before add
-                    tmpResources.get(resourceState).setTransitions(new ArrayList<Transition>(ctxListTransitions)); // update
-                                                                                                                   // transition
+                    // clear the list before add
+                    tmpResources.get(resourceState).getTransitions().clear();
+                    // update transition
+                    tmpResources.get(resourceState).setTransitions(new ArrayList<Transition>(ctxListTransitions));
                 }
                 resources.putAll(tmpResources);
 
@@ -441,36 +431,37 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
             }
             return result;
         }
-        /**
-         * @param beanXml the filename to locate
-         * @return a Spring ApplicationContext
-         */
-        private ApplicationContext createApplicationContext(String beanXml) {
-            ApplicationContext result = null;
 
-            if(configLoader.getIrisConfigDirPaths().isEmpty()) {
-                // Try and load the resource from the classpath
-                String description = "classpath:" + beanXml;
-                attempts.add(description);
-                result = new ClassPathXmlApplicationContext(beanXml);
+		/**
+		 * @param beanXml the filename to locate
+		 * @return a Spring ApplicationContext
+		 */
+		private ApplicationContext createApplicationContext(String beanXml) {
+			ApplicationContext result = null;
+
+			if(configLoader.getIrisConfigDirPaths().isEmpty()) {
+				// Try and load the resource from the classpath
+				String description = "classpath:" + beanXml;
+				attempts.add(description);
+				result = new ClassPathXmlApplicationContext(new String[] {beanXml});
                 foundFile = description;
-            } else {
-                // Try and load the resource from the file system as a resource directories has been specified
-                for(String directoryPath : configLoader.getIrisConfigDirPaths()) {
-                    Path filePath = Paths.get(directoryPath, beanXml);
-                    result = createApplicationContext(new File(filePath.toString()));
-                    if (result != null) {
+			} else {
+				// Try and load the resource from the file system as a resource directories has been specified
+				for(String directoryPath : configLoader.getIrisConfigDirPaths()) {
+					Path filePath = Paths.get(directoryPath, beanXml);
+					result = createApplicationContext(new File(filePath.toString()));
+					if (result != null) {
                         break;
                     }
-                }
-            }
-            return result;
-        }
+				}
+			}
+			return result;
+		}
 
         private ApplicationContext createApplicationContext(File file) {
-            URL fileURL = resolveFileURL(file);
-            if (fileURL == null) {
-                return null;
+		    URL fileURL = resolveFileURL(file);
+		    if (fileURL == null) {
+		        return null;
             }
             attempts.add(fileURL.toString());
             if (file.exists()) {
@@ -480,7 +471,7 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
             return null;
         }
 
-        private URL resolveFileURL(File file) {
+		private URL resolveFileURL(File file) {
             try {
                 return file.toURI().toURL();
             } catch (MalformedURLException e) {
@@ -528,22 +519,32 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
         
         return resourceStateId;
     }
-    
-    private List<String> getFileLists() {
+
+    // T24_Resource => IRIS-T24_ResourceName-PRD.xml
+    // IRIS-T24_ResourceName_2324234234-PRD.xml --> IRIS-T24_ResourceName_(//d+)-PRD.xml
+    private List<String> getTimestampedResourceStateFileLists(String tmpResourceName) {
         List<String> filename = new ArrayList<String>();
         for (String pathToDirectory : configLoader.getIrisConfigDirPaths()) {
-            File dir = new File(pathToDirectory);
-            File files[] = dir.listFiles(new FilenameFilter() {
+
+            Path dir = FileSystems.getDefault().getPath(pathToDirectory);
+            final PathMatcher matcher = dir.getFileSystem().getPathMatcher(
+                    "regex:" + "IRIS-" + tmpResourceName + "_(\\d+)-PRD.xml");
+            DirectoryStream.Filter<Path> filter = new DirectoryStream.Filter<Path>() {
+
                 @Override
-                public boolean accept(File dir, String name) {
-                    return name.matches(CTX_ENQ_FILENAME_PATTERN);
+                public boolean accept(Path entry) {
+                    return matcher.matches(entry.getFileName());
                 }
-            });
-            for (File file : files) {
-                filename.add(file.getName());
+            };
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, filter)) {
+
+                for (Path streamEntry : stream) {
+                    filename.add(streamEntry.toFile().getName());
+                }
+            } catch (IOException e) {
+                logger.error("Failed to load timestamped file from" + dir);
             }
         }
         return filename;
     }
-    
 }
