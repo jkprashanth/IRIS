@@ -404,32 +404,28 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 
         private ResourceState loadAllResourceStatesFromTimeStampedResourceState(String resourceState,
                 List<String> timestampledFiles) {
-
-            Set<Transition> ctxListTransitions = new HashSet<Transition>();
-
-            int itsAddTime = 0;
-            ResourceState result = null;
-            // load timestamp based resourcestate
-            for (String timestampledFile : timestampledFiles) {
-
-                ApplicationContext context2 = createApplicationContext(timestampledFile);
-                Map<String, ResourceState> tmpResources = context2.getBeansOfType(ResourceState.class);
-                // add transisition
-                ctxListTransitions.addAll(tmpResources.get(resourceState).getTransitions());
-                if (!(itsAddTime < timestampledFiles.size() - 1)) {
-                    // clear the list before add
-                    tmpResources.get(resourceState).getTransitions().clear();
-                    // update transition
-                    tmpResources.get(resourceState).setTransitions(new ArrayList<Transition>(ctxListTransitions));
-                }
-                resources.putAll(tmpResources);
-
-                if (tmpResources.containsKey(resourceState)) {
-                    result = tmpResources.get(resourceState);
-                }
-                itsAddTime++;
+            if (timestampledFiles.size() == 0) {
+                return null;
             }
-            return result;
+            ApplicationContext beanContext = createApplicationContext(timestampledFiles.get(0));
+            Map<String, ResourceState> fileResources = beanContext.getBeansOfType(ResourceState.class);
+            ResourceState resource = loadAllResourceStatesFromTimeStampedResourceState(resourceState,
+                    timestampledFiles.subList(1, timestampledFiles.size()));
+            if (resource == null) {
+                resource = fileResources.get(resourceState);
+            } else {
+                Set<Transition> newTransitions = new HashSet<>(fileResources.get(resourceState).getTransitions());
+                for (Transition transition : newTransitions) {
+                    transition.setSource(resource);
+                }
+                newTransitions.addAll(new HashSet<>(resource.getTransitions()));
+                resource.getTransitions().clear();
+                resource.setTransitions(new ArrayList<Transition>(newTransitions));
+            }
+            resources.putAll(fileResources);
+            resources.put(resourceState, resource);
+            return resource;
+
         }
 
 		/**

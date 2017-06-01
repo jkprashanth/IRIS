@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (C) 2012 - 2013 Temenos Holdings N.V.
+ -->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/util 
+		http://www.springframework.org/schema/util/spring-util-3.0.xsd
+		http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context-3.0.xsd"
+		default-lazy-init="true">
+
+<!-- Define Spring bean for resource : notes -->
+<!-- begin spring bean for state : Tst_Twins-notes -->
+<bean id="Tst_Twins-notes" class="com.temenos.interaction.core.hypermedia.ResourceState">
+	<constructor-arg name="entityName" value="Note" />
+	<constructor-arg name="name" value="notes" />
+	<constructor-arg>
+		<list>
+		<bean class="com.temenos.interaction.core.hypermedia.Action">
+			<constructor-arg value="GETNotes" />
+			<constructor-arg value="VIEW" />
+		</bean>
+		</list>
+	</constructor-arg>
+	<constructor-arg name="path" value="/TstPath/notes" />
+	<constructor-arg name="rels">
+		<null />
+	</constructor-arg>
+	<constructor-arg name="uriSpec"><bean class="com.temenos.interaction.core.hypermedia.UriSpecification"><constructor-arg name="name" value="notes" /><constructor-arg name="template" value="/TstPath/notes" /></bean></constructor-arg>
+	<constructor-arg name="errorState"><null /></constructor-arg>
+	
+	<!-- Start property transitions list -->
+	<property name="transitions">
+		<list>
+		<!-- create transitions  -->
+	<!-- begin transition : Tst_Twins-Page1 -->
+	<bean class="com.temenos.interaction.springdsl.TransitionFactoryBean">
+		<property name="flags"><util:constant static-field="com.temenos.interaction.core.hypermedia.Transition.EMBEDDED"/></property>
+		<property name="method" value="GET" />
+		<property name="target"><bean class="com.temenos.interaction.core.hypermedia.LazyResourceState"><constructor-arg name="name" value="Tst_Twins-Page1" /></bean>
+		
+		</property>
+		<property name="uriParameters"><util:map></util:map></property>
+		<property name="label" value="Page1" />
+	</bean>
+	<!-- end transition : Tst_Twins-Page1 -->
+		</list>
+	</property>
+</bean>	
+<!-- end spring bean for state : Tst_Twins-notes -->		
+<!-- Define Spring bean for resource : Page1 -->
+<!-- begin spring bean for state : Tst_Twins-Page1 -->
+<bean id="Tst_Twins-Page1" class="com.temenos.interaction.core.hypermedia.ResourceState">
+	<constructor-arg name="entityName" value="Note" />
+	<constructor-arg name="name" value="Page1" />
+	<constructor-arg>
+		<list>
+		<bean class="com.temenos.interaction.core.hypermedia.Action">
+			<constructor-arg value="ViewRecord" />
+			<constructor-arg value="VIEW" />
+		</bean>
+		</list>
+	</constructor-arg>
+	<constructor-arg name="path" value="/TstPath/notes/Page1" />
+	<constructor-arg name="rels">
+		<null />
+	</constructor-arg>
+	<constructor-arg name="uriSpec"><bean class="com.temenos.interaction.core.hypermedia.UriSpecification"><constructor-arg name="name" value="Page1" /><constructor-arg name="template" value="/TstPath/notes/Page1" /></bean></constructor-arg>
+	<constructor-arg name="errorState"><null /></constructor-arg>
+	
+	<!-- Start property transitions list -->
+	<property name="transitions">
+		<list>
+		<!-- create transitions  -->
+		</list>
+	</property>
+</bean>	
+<!-- end spring bean for state : Tst_Twins-Page1 -->		
+</beans>
