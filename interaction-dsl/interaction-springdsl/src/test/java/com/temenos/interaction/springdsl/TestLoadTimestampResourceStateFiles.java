@@ -53,7 +53,7 @@ public class TestLoadTimestampResourceStateFiles {
     public void setUpClass() {
         dsl = new SpringDSLResourceStateProvider();
         
-        String location = classloader.getResource("PRDFiles").getPath().replaceFirst("/", "");
+        String location = classloader.getResource("PRDFiles/IRIS-Tst_Twins_1-PRD.xml").getPath().replaceFirst("/", "");
         System.out.println(location+"/..");
         System.out.println(Arrays.deepToString(new File(location+"/..").list()));
         System.out.println(location);
