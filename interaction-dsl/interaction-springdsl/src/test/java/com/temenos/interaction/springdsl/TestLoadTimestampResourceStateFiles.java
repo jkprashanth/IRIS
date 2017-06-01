@@ -25,12 +25,13 @@ public class TestLoadTimestampResourceStateFiles {
     private  SpringDSLResourceStateProvider dsl;
     private  ConfigLoader configLoader = new ConfigLoader();
     private  ResourceState resource;
-    private  ClassLoader classloader = getClass().getClassLoader();
+    private  ClassLoader classloader = this.getClass().getClassLoader();
     @Before
     public void setUpClass() {
         dsl = new SpringDSLResourceStateProvider();
         
         String location = classloader.getResource("PRDFiles").getPath().replaceFirst("/", "");
+        System.out.print(location);
         configLoader.setIrisConfigDirPath(location);
         dsl.setConfigLoader(configLoader);
         resource = dsl.getResourceState("Tst_Twins-notes");
