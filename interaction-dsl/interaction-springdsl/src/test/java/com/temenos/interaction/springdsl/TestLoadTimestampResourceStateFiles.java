@@ -6,7 +6,7 @@ import static org.junit.Assert.assertNull;
 
 import java.util.List;
 
-import org.junit.BeforeClass;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.temenos.interaction.core.hypermedia.ResourceState;
@@ -22,14 +22,15 @@ import com.temenos.interaction.core.resource.ConfigLoader;
  */
 public class TestLoadTimestampResourceStateFiles {
 
-    private static SpringDSLResourceStateProvider dsl;
-    private static ConfigLoader configLoader = new ConfigLoader();
-    private static ResourceState resource;
-
-    @BeforeClass
-    public static void setUpClass() {
+    private  SpringDSLResourceStateProvider dsl;
+    private  ConfigLoader configLoader = new ConfigLoader();
+    private  ResourceState resource;
+    private  ClassLoader classloader = getClass().getClassLoader();
+    @Before
+    public void setUpClass() {
         dsl = new SpringDSLResourceStateProvider();
-        String location = ClassLoader.getSystemClassLoader().getResource("PRDFiles").getPath().replaceFirst("/", "");
+        
+        String location = classloader.getResource("PRDFiles").getPath().replaceFirst("/", "");
         configLoader.setIrisConfigDirPath(location);
         dsl.setConfigLoader(configLoader);
         resource = dsl.getResourceState("Tst_Twins-notes");
