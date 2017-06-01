@@ -53,7 +53,7 @@ public class TestLoadTimestampResourceStateFiles {
     public void setUpClass() {
         dsl = new SpringDSLResourceStateProvider();
         
-        String location = classloader.getResource("PRDFiles").getPath().replaceFirst("/", "");
+        String location = classloader.getResource("PRDFiles").getPath();
         String loc = new File(location).getAbsolutePath();
         System.out.println("location absolute:"+loc);
         System.out.println(location+"/..");
