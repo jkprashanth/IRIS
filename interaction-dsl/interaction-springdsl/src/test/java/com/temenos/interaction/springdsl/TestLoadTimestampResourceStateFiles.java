@@ -53,12 +53,14 @@ public class TestLoadTimestampResourceStateFiles {
     public void setUpClass() {
         dsl = new SpringDSLResourceStateProvider();
         
-        String location = classloader.getResource("PRDFiles/").getPath().replaceFirst("/", "");
+        String location = classloader.getResource("PRDFiles").getPath().replaceFirst("/", "");
+        String loc = new File(location).getAbsolutePath();
+        System.out.println("location absolute:"+loc);
         System.out.println(location+"/..");
         System.out.println(Arrays.deepToString(new File(location+"/..").list()));
         System.out.println(location);
         System.out.println(Arrays.deepToString(new File(location).list()));
-        configLoader.setIrisConfigDirPath(location);
+        configLoader.setIrisConfigDirPath(loc);
         dsl.setConfigLoader(configLoader);
         resource = dsl.getResourceState("Tst_Twins-notes");
     }
