@@ -40,6 +40,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.context.support.FileSystemXmlApplicationContext;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import com.temenos.interaction.core.hypermedia.Event;
 import com.temenos.interaction.core.hypermedia.MethodNotAllowedException;
@@ -439,6 +442,9 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 				// Try and load the resource from the classpath
 				String description = "classpath:" + beanXml;
 				attempts.add(description);
+				if(null == this.getClass().getClassLoader().getResource(beanXml)){
+                    beanXml = getTimeStampBeanXmlName(beanXml);   
+                }   
 				result = new ClassPathXmlApplicationContext(new String[] {beanXml});
                 foundFile = description;
 			} else {
@@ -478,6 +484,23 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 
     }
 
+	   /**
+     * Check timeStamped beanXml availability on classpath
+     */
+    public String getTimeStampBeanXmlName(String beanXml) {
+        String beanFileName = beanXml.substring(0, beanXml.indexOf("-PRD.xml"));
+            Resource[] patternResource = null;
+            try {
+                patternResource = new PathMatchingResourcePatternResolver().getResources("classpath*:"
+                        + beanFileName.concat("_*-PRD.xml"));
+                if (patternResource != null && patternResource.length > 0)
+                    if (Pattern.matches(beanFileName.concat("_(\\d+)-PRD.xml"), patternResource[0].getFilename()))
+                        beanXml = patternResource[0].getFilename();
+            } catch (IOException e) {
+                logger.error("Unable to find the resource from classpath");
+            }
+        return beanXml;
+    }
 
     @Override
     public ResourceState getResourceState(String httpMethod, String url) throws MethodNotAllowedException {
