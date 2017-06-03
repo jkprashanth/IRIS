@@ -437,7 +437,7 @@ public class SpringDSLResourceStateProvider implements ResourceStateProvider, Dy
 		 */
 		private ApplicationContext createApplicationContext(String beanXml) {
 			ApplicationContext result = null;
-
+ 
 			if(configLoader.getIrisConfigDirPaths().isEmpty()) {
 				// Try and load the resource from the classpath
 				String description = "classpath:" + beanXml;
