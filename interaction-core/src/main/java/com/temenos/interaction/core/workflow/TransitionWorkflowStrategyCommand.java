@@ -29,13 +29,15 @@ import com.temenos.interaction.core.command.TransitionCommand;
 import com.temenos.interaction.core.hypermedia.ResourceState;
 import com.temenos.interaction.core.hypermedia.Transition;
 
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * An implementation of a workflow {@link TransitionCommand}.
  *
  * @author ikarady
  */
-public class TransitionWorkflowStrategyCommand extends NaiveWorkflowStrategyCommand implements TransitionCommand {
+public class TransitionWorkflowStrategyCommand extends AbortOnErrorWorkflowStrategyCommand implements TransitionCommand {
 
     @Override
     public Result execute(InteractionContext ctx) throws InteractionException {
@@ -67,18 +69,47 @@ public class TransitionWorkflowStrategyCommand extends NaiveWorkflowStrategyComm
             return false;
         }
         for (InteractionCommand command : commands) {
-            if (!((TransitionCommand) command).isInterim()) {
-                return false;
+            if (isInterim(command)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     @Override
     public void addCommand(InteractionCommand command) {
         if (command instanceof TransitionCommand) {
-            commands.add(command);
+            if (command instanceof TransitionWorkflowStrategyCommand) {
+                addTransitionWorkflowCommand((TransitionWorkflowStrategyCommand) command);
+            } else if (!contains(command)) {
+                commands.add(command);
+            }
         }
     }
 
+    private boolean isInterim(InteractionCommand command) {
+        return command instanceof TransitionCommand && ((TransitionCommand) command).isInterim();
+    }
+
+    private void addTransitionWorkflowCommand(TransitionWorkflowStrategyCommand workflow) {
+        for (InteractionCommand command : workflow.getCommands()) {
+            addCommand(command);
+        }
+    }
+
+    private List<InteractionCommand> getCommands() {
+        List<InteractionCommand> result = new ArrayList<>();
+        result.addAll(commands);
+        return result;
+    }
+
+    private boolean contains(InteractionCommand command) {
+        for (InteractionCommand existingCommand : commands) {
+            if (existingCommand.equals(command)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
 }

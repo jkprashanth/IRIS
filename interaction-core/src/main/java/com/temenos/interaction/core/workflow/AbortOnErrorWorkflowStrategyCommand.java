@@ -38,7 +38,7 @@ import com.temenos.interaction.core.command.InteractionException;
  */
 public class AbortOnErrorWorkflowStrategyCommand implements WorkflowCommand {
 
-	private List<InteractionCommand> commands = new ArrayList<InteractionCommand>();
+	protected List<InteractionCommand> commands = new ArrayList<InteractionCommand>();
 	
 	public AbortOnErrorWorkflowStrategyCommand() {}
 
