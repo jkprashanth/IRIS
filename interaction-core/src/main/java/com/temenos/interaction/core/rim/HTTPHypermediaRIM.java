@@ -892,15 +892,15 @@ public class HTTPHypermediaRIM implements HTTPResourceInteractionModel {
             Response response = handleRequest(headers, newCtx, event, action,  ctx.getResource(), config, true);
             
             //forward any parameters set by the executed InteractionCommand to the InteractionContext
-            ctx.getQueryParameters().putAll(newCtx.getQueryParameters());
+            ctx.getQueryParameters().putAll(toParameters(newCtx.getQueryParameters()));
             ctx.getOutQueryParameters().putAll(newCtx.getOutQueryParameters());
             ctx.getPathParameters().putAll(filterParameters(newPathParameters, ctx.getPathParameters().keySet()));
 
             return new ResponseWrapper(response, new ArrayList<Link>(
                     new LinkGeneratorImpl(hypermediaEngine, targetState.getSelfTransition(), newCtx
-                    ).createLink(newPathParameters, newQueryParameters, response.getEntity())
+                    ).createLink(newPathParameters, toParameters(newQueryParameters), response.getEntity())
                 ).get(0), 
-                newQueryParameters,
+                toParameters(newQueryParameters),
                 targetState
             );
 
@@ -908,6 +908,19 @@ public class HTTPHypermediaRIM implements HTTPResourceInteractionModel {
             LOGGER.error("Failed to access resource [{}] with error:", targetState.getId(), ie);
             throw new RuntimeException(ie);
         }
+    }
+
+    /*
+     * Skipping null parameters
+     */
+    private MultivaluedMap<String, String> toParameters(MultivaluedMap<String, String> properties) {
+        MultivaluedMap<String, String> parameters = new MultivaluedMapImpl<>();
+        for (Entry<String, List<String>> entry : properties.entrySet()) {
+            if (properties.getFirst(entry.getKey()) != null) {
+                parameters.add(entry.getKey(), properties.getFirst(entry.getKey()));
+            }
+        }
+        return parameters;
     }
 
     protected MultivaluedMap<String, String> filterParameters(MultivaluedMap<String, String> parameters, Set<String> filterKeys) {
