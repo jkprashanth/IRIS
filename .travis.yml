@@ -2,6 +2,7 @@
 language: java
 sudo: true
 install: true
+dist: precise
 before_script:
   - echo "MAVEN_OPTS='-Xms512m -Xmx1024m -XX:PermSize=512m
    -XX:MaxPermSize=1024m -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
