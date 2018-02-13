@@ -201,6 +201,20 @@ public class AtomXMLProvider implements MessageBodyReader<RESTResource>, Message
             OEntity tempEntity = entityResource.getEntity();
             EdmEntitySet entitySet = getEdmEntitySet(entityResource.getEntityName());
             List<OLink> olinks = formOLinks(entityResource);
+            
+            //Extract Embedded resources LinkId 
+            Collection<Link> links = new ArrayList<Link>(); 
+            if(entityResource.getEmbedded()!=null && !entityResource.getEmbedded().isEmpty()){
+            for(java.util.Map.Entry<Transition, RESTResource> embedResource : entityResource.getEmbedded().entrySet()){//separate the embedded portion from entity resource
+                if(embedResource.getValue() instanceof CollectionResource){
+                CollectionResource<OEntity> collectionResource = ((CollectionResource<OEntity>) embedResource.getValue());
+                for (EntityResource<OEntity> collectionEntity : collectionResource.getEntities()){//iterate each entity and add the link sets
+                    links.addAll(collectionEntity.getLinks());
+                }
+                }
+            } 
+            }
+            entryWriter.setEmbedLinkId(links);
             //Write entry
             // create OEntity with our EdmEntitySet see issue https://github.com/aphethean/IRIS/issues/20
             OEntity oentity = OEntities.create(entitySet, tempEntity.getEntityKey(), tempEntity.getProperties(), null);
