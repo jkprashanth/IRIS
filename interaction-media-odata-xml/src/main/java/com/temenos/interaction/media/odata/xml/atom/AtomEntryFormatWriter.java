@@ -68,8 +68,17 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
 	public AtomEntryFormatWriter(ResourceState serviceDocument) {
 		this.serviceDocument = serviceDocument;
 	}
+	
+	private Collection<Link> embedLinkId;
 
-  @Override
+    /**
+     * @param embedLinkId collection for embedded resource
+     */
+    public void setEmbedLinkId(Collection<Link> embedLinkId) {
+        this.embedLinkId = embedLinkId;
+    }
+
+@Override
   public String getContentType() {
     return ODataConstants.APPLICATION_ATOM_XML_CHARSET_UTF8;
   }
@@ -79,7 +88,6 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
 
     DateTime utc = new DateTime().withZone(DateTimeZone.UTC);
     String updated = InternalUtil.toString(utc);
-
     XMLWriter2 writer = XMLFactoryProvider2.getInstance().newXMLWriterFactory2().createXMLWriter(w);
     writer.startDocument();
 
@@ -92,7 +100,8 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
     OEntity origOE = target.getEntity() ;   
     OEntity newOE = OEntities.create(entitySet, origOE.getEntityKey(), origOE.getProperties(), olinks);
 
-    writeEntry(writer, newOE, newOE.getProperties(), newOE.getLinks(), baseUri, updated, entitySet, true);
+        writeEntry(writer, newOE, newOE.getProperties(), newOE.getLinks(), baseUri, updated, entitySet, true);
+
     writer.endDocument();
   }
 
@@ -101,7 +110,11 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
 	      List<OProperty<?>> entityProperties, List<OLink> entityLinks,
 	      String baseUri, String updated,
 	      EdmEntitySet ees, boolean isResponse) {
-	  return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse, null);
+        if (embedLinkId != null & !embedLinkId.isEmpty()) {
+            return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse,
+                    embedLinkId);
+        }
+        return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse, null);
   }
   
   //OData olink doesn't have option to provide linkid, so writing linkid explicitly 

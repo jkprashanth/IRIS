@@ -359,6 +359,80 @@ public class TestAtomXMLProvider {
 	    assertTrue(myDiff.similar());		
 	}
 	
+    /**
+     * Test case to ensure the whether the writer contain all the embedded
+     * resource link along with id param
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testEmbeddedCOllectionResourceLinkId() throws Exception {
+        // Create Collection resource
+        List<EntityResource<OEntity>> oentities = new ArrayList<EntityResource<OEntity>>();
+        EdmDataServices edmDataServices = createMockFlightEdmDataServices();
+        EdmEntitySet entitySet = edmDataServices.findEdmEntitySet("Flight");
+        List<OLink> olinks = new ArrayList<OLink>();
+        olinks.add(OLinks.relatedEntity("Checkid", "title", "href"));
+        List<OProperty<?>> properties = new ArrayList<OProperty<?>>();
+        properties.add(OProperties.string("name", "blah"));
+        OEntity oEntity = OEntities.create(entitySet, OEntityKey.create("NO"), properties, olinks);
+        EntityResource<OEntity> collEntityResource = new EntityResource<OEntity>(oEntity);
+
+        // Link creation
+        Transition transition = createMockTransition(createMockResourceState("Flight", "Flight", false),
+                createMockResourceState("Flight", "Flight", false));
+        transition.setLinkId("linkId");
+        List<Link> links = new ArrayList<Link>();
+        links.add(
+                new Link.Builder().transition(transition).title("title").rel("Checkid").href("href").id("id").build());
+        collEntityResource.setLinks(links);
+        oentities.add(collEntityResource);
+        CollectionResource<OEntity> cr = new CollectionResource<OEntity>("Flights", oentities);
+        Map<Transition, RESTResource> resourceMap = new HashMap<>();
+        resourceMap.put(transition, cr);
+
+        // Create Parent Entity resource
+        EdmDataServices edmDataServices2 = createMockFlightEdmDataServices();
+        EdmEntitySet persons2 = edmDataServices2.findEdmEntitySet("Flight");
+        EntityResource<OEntity> childResource2 = createMockEntityResourceOEntity(persons2);
+        List<OLink> olinks2 = new ArrayList<OLink>();
+        olinks2.add(OLinks.relatedEntity("self", "self", "href"));
+        olinks2.add(OLinks.relatedEntityInline("Checkid", "title", null, childResource2.getEntity()));
+        List<OProperty<?>> properties2 = new ArrayList<OProperty<?>>();
+        properties2.add(OProperties.string("name", "blah"));
+        OEntity oEntity2 = OEntities.create(persons2, OEntityKey.create("NO"), properties2, olinks2);
+        EntityResource<OEntity> EntityResource2 = new EntityResource<OEntity>(oEntity2);
+        List<Link> links2 = new ArrayList<Link>();
+        links2.add(new Link.Builder().transition(transition).title("title").rel("self").href("href").id("id").build());
+        EntityResource2.setLinks(links2);
+
+        // set the embedded resource
+        EntityResource2.setEmbedded(resourceMap);
+        when(edmDataServices2.getEdmEntitySet(any(EdmEntityType.class))).thenReturn(persons2);
+
+        // Wrap entity resource into a JAX-RS GenericEntity instance
+        GenericEntity<EntityResource<OEntity>> ge = new GenericEntity<EntityResource<OEntity>>(EntityResource2) {
+        };
+
+        // Create provider
+        MockAtomXMLProvider p = new MockAtomXMLProvider(createMockMetadataOData4j(edmDataServices2));
+        UriInfo uriInfo = mock(UriInfo.class);
+        URI uri = new URI("http://localhost:8080/responder/rest");
+        when(uriInfo.getBaseUri()).thenReturn(uri);
+        p.setUriInfo(uriInfo);
+
+        // Serialize resource
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        p.writeTo(ge.getEntity(), ge.getRawType(), ge.getType(), null, MediaType.APPLICATION_ATOM_XML_TYPE, null, bos);
+        String responseString = new String(bos.toByteArray(), "UTF-8");
+
+        // assertion
+        assertTrue(responseString.contains(
+                "<content type=\"application/xml\"><m:properties><d:name>blah</d:name></m:properties></content>"));
+        assertTrue(responseString.contains("title=\"title\" href=\"href\" id=\"linkId\" "));
+
+    }
+    
 	private EdmEntitySet createMockEdmEntitySet() {
 		// Create an entity set
 		List<EdmProperty.Builder> eprops = new ArrayList<EdmProperty.Builder>();
