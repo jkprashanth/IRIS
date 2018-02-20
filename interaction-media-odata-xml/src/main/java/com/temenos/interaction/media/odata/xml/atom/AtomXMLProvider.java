@@ -203,8 +203,9 @@ public class AtomXMLProvider implements MessageBodyReader<RESTResource>, Message
             List<OLink> olinks = formOLinks(entityResource);
             
             //Process to get EmbedLinkId 
-            Collection<Link> links = new ArrayList<Link>(); 
+            Collection<Link> links = null;
             if(entityResource.getEmbedded()!=null && !entityResource.getEmbedded().isEmpty()){
+                links =  new ArrayList<Link>(); 
             for(java.util.Map.Entry<Transition, RESTResource> embedResource : entityResource.getEmbedded().entrySet()){//separate the embedded portion from entity resource
                 if(embedResource.getValue() instanceof CollectionResource){
                 CollectionResource<OEntity> collectionResource = ((CollectionResource<OEntity>) embedResource.getValue());
@@ -214,7 +215,7 @@ public class AtomXMLProvider implements MessageBodyReader<RESTResource>, Message
                 }
             } 
             }
-            entryWriter.setEmbedLinkId(links);
+            entryWriter = new AtomEntryFormatWriter(serviceDocument, links);
             //Write entry
             // create OEntity with our EdmEntitySet see issue https://github.com/aphethean/IRIS/issues/20
             OEntity oentity = OEntities.create(entitySet, tempEntity.getEntityKey(), tempEntity.getProperties(), null);

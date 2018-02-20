@@ -71,10 +71,9 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
 	
 	private Collection<Link> embedLinkId;
 
-    /**
-     * @param embedLinkId collection for embedded resource
-     */
-    public void setEmbedLinkId(Collection<Link> embedLinkId) {
+
+    public AtomEntryFormatWriter(ResourceState serviceDocument,Collection<Link> embedLinkId) {
+        this.serviceDocument = serviceDocument;
         this.embedLinkId = embedLinkId;
     }
 
@@ -110,11 +109,7 @@ public class AtomEntryFormatWriter extends XmlFormatWriter implements FormatWrit
 	      List<OProperty<?>> entityProperties, List<OLink> entityLinks,
 	      String baseUri, String updated,
 	      EdmEntitySet ees, boolean isResponse) {
-        if (embedLinkId != null & !embedLinkId.isEmpty()) {
-            return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse,
-                    embedLinkId);
-        }
-        return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse, null);
+        return writeEntry(writer, oe, entityProperties, entityLinks, baseUri, updated, ees, isResponse, embedLinkId);
   }
   
   //OData olink doesn't have option to provide linkid, so writing linkid explicitly 

@@ -13,7 +13,7 @@ script:
   - mvn clean install -B -V 2>/dev/null
 jdk:
     - oraclejdk8
-branches:
+braches:
     only:
         - master
         - 0.15.x
