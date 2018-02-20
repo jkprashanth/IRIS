@@ -10,6 +10,6 @@ before_script:
    -Dmaven.source.skip=true'" > ~/.mavenrc
 script:
   # Travis 4MB log limit, hence secondary log is redirected to sink
-  - mvn clean install -X -B -V 2 > /dev/null
+  - mvn clean install -X 
 jdk:
     - oraclejdk8
